@@ -1,0 +1,12 @@
+# Vercel uploads do not respect .gitignore, so anything not listed here is sent
+# with the deployment. The local stack in particular contains a live Postgres
+# data directory (66MB) and the JWT signing key the stack generated for it, so a
+# CLI deploy would otherwise upload both.
+
+local-stack
+scripts
+supabase
+
+# Pointless to ship, and .env.local holds the local anon key.
+.env.local
+dist

@@ -123,7 +123,7 @@ node mkjwt.mjs "$JWT_SECRET" anon anon > "$STACK/anon.key"
 # Point the app at the gateway so `npm run dev` works straight after this.
 cat > "$PROJECT/.env.local" <<EOF
 VITE_SUPABASE_URL=http://127.0.0.1:54321
-VITE_SUPABASE_ANON_KEY=$(cat "$STACK/anon.key")
+VITE_SUPABASE_PUBLISHABLE_KEY=$(cat "$STACK/anon.key")
 EOF
 
 printf 'gateway:   %s\n' "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54321/auth/v1/health)"

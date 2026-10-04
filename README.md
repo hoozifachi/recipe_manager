@@ -61,6 +61,71 @@ a browser: register, sign in, create, search, filter by tag, edit, delete,
 sign out. It uses the system Chromium; set `CHROME_PATH` if yours is somewhere
 unusual.
 
+`smoke` targets whatever `.env.local` points at. Export the two variables to run
+it against a hosted project instead:
+
+```bash
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co \
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_... npm run smoke
+```
+
+It is destructive against whatever it is given, since it signs up throwaway
+accounts and clears their recipes and tags.
+
+## Deploying
+
+### 1. Supabase
+
+Create a project, then apply the schema. `db push` connects to the remote
+database directly and needs no Docker:
+
+```bash
+supabase login
+supabase link --project-ref <project-ref>
+supabase db push --dry-run
+supabase db push
+```
+
+Then in the dashboard:
+
+- **Auth → Email**: turn **Confirm email** off. The account is created through the
+  login page, and with confirmation on `signUp` returns no session, so you would
+  need SMTP configured just to finish registering.
+- **Auth → URL Configuration → Site URL**: set it to the production Vercel URL
+  once that exists.
+- **Settings → API Keys**: create the `default` publishable key
+  (`sb_publishable_...`). Legacy `anon`/`service_role` JWTs are deprecated at the
+  end of 2026; `service_role` also has no use here because it bypasses RLS.
+
+The migration grants privileges explicitly. This is required, not defensive:
+Supabase projects created after 2026-05-30 no longer apply default privileges
+for `postgres` in `public`, and a RLS policy is only consulted once the calling
+role already holds table privileges. Without those grants `db push` succeeds and
+then every query fails with `permission denied for table recipes`.
+
+Once you have registered in the browser, turn **email signup off** in the Auth
+settings so nobody else can.
+
+### 2. Vercel
+
+Import the GitHub repo. `vercel.json` sets the framework, build command, output
+directory, and Node version. The rewrite is the part that matters: without it,
+refreshing `/recipes/:id` 404s, because Vite builds a single-page app and Vercel
+has no fallback for client-side routes.
+
+Set two environment variables, both safe to expose since RLS is what protects
+the data:
+
+```
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+`.vercelignore` keeps the local stack out of uploads. It matters for
+`vercel deploy` from the CLI: Vercel does not apply `.gitignore`, so without it
+a deploy would send the 66MB Postgres data directory and the stack's JWT signing
+key. A GitHub import only uploads tracked files, which are already clean.
+
 ## Notes
 
 - `local-stack/gateway.mjs` exists because `supabase-js` is configured with a
@@ -69,5 +134,6 @@ unusual.
   hosted Supabase normally handles in Kong.
 - `.env.local` is generated and gitignored. `.env.example` is the template for
   pointing at a hosted Supabase project instead.
-- RLS is the real security boundary, not the anon key: the key ships inside the
-  browser bundle, and the policies in the migration are what keep rows private.
+- RLS is the real security boundary, not the publishable key: the key ships
+  inside the browser bundle, and the policies in the migration are what keep
+  rows private.

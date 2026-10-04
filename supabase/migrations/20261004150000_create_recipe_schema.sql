@@ -315,3 +315,34 @@ create policy "recipe_tags are deletable by their owner"
       where r.id = recipe_id and r.user_id = (select auth.uid())
     )
   );
+
+-- Privileges -----------------------------------------------------------------
+-- These have to be explicit. A RLS policy is only consulted *after* the calling
+-- role already holds table privileges, and Supabase projects created after
+-- 2026-05-30 no longer apply default privileges for `postgres` in `public`. On
+-- those projects `db push` succeeds and then every query fails with
+-- "permission denied for table recipes" (42501).
+--
+-- The bundled local stack hides this: local-stack/up.sh runs `grant all` to
+-- anon, authenticated after each migration, which the hosted database does not.
+-- Re-running these statements on an older project that still has the defaults is
+-- a no-op, so they are safe everywhere.
+--
+-- `anon` is intentionally absent: every policy above is `to authenticated`, so
+-- anonymous callers should not be able to touch these tables at all.
+grant usage on schema public to authenticated;
+
+grant select, insert, update, delete on table recipes to authenticated;
+grant select, insert, update, delete on table tags to authenticated;
+-- recipe_tags rows are rewritten wholesale, never updated in place.
+grant select, insert, delete on table recipe_tags to authenticated;
+
+grant execute on function ingredients_to_tsvector(text[]) to authenticated;
+grant execute on function set_updated_at() to authenticated;
+grant execute on function search_recipes(text, uuid[], integer, integer) to authenticated;
+grant execute on function get_recipe(uuid) to authenticated;
+
+-- ingredients_to_tsvector needs EXECUTE for authenticated specifically because
+-- recipes.search_vector is a generated column: Postgres evaluates that
+-- expression with the privileges of the role doing the INSERT/UPDATE, so
+-- without this every write fails on permission denied for function.

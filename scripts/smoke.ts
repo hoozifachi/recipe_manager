@@ -1,4 +1,5 @@
-// End-to-end check of the real src/lib/queries.ts against the local stack.
+// End-to-end check of the real src/lib/queries.ts against whichever Supabase
+// project scripts/run-smoke.mjs was pointed at.
 import assert from 'node:assert/strict'
 import { supabase } from '../src/lib/supabase'
 import {
@@ -159,10 +160,22 @@ await ensureAccount('me@example.com', 'chocolate123')
 assert.equal((await searchRecipes('torte')).length, 1, 'owner row must survive foreign attempts')
 log('owner intact', 'still 1 recipe')
 
-// signed out, everything is invisible
+// Signed out, everything is invisible. Depending on the target this surfaces
+// either as zero rows or as a permission error: `anon` holds no privileges on
+// these tables at all on a current Supabase project, so the request is refused
+// outright rather than filtered down to nothing. Both outcomes are correct,
+// since the grants at the end of the migration only cover `authenticated`.
 await supabase.auth.signOut()
-assert.equal((await searchRecipes('')).length, 0, 'signed-out client must see nothing')
-log('signed out', '0 recipes')
+let signedOutRows
+try {
+  signedOutRows = (await searchRecipes('')).length
+  log('signed out', '0 recipes')
+} catch (error) {
+  assert.match(error.message, /permission denied/i, `unexpected signed-out error: ${error.message}`)
+  signedOutRows = 0
+  log('signed out', 'refused, anon has no privileges')
+}
+assert.equal(signedOutRows, 0, 'signed-out client must see nothing')
 await ensureAccount('me@example.com', 'chocolate123')
 
 // cleanup

@@ -132,6 +132,7 @@ export type Database = {
         }[]
       }
       set_updated_at: { Args: Record<PropertyKey, never>; Returns: unknown }
+      signup_allowed: { Args: Record<PropertyKey, never>; Returns: boolean }
     }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>

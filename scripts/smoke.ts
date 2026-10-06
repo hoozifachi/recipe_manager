@@ -9,6 +9,7 @@ import {
   listRecipes,
   listTags,
   searchRecipes,
+  signupAllowed,
 
   toDraft,
   updateRecipe,
@@ -16,7 +17,15 @@ import {
 
 const log = (label, value) => console.log(`  ${label}: ${value}`)
 
-/** Signs in, creating the account first if the stack was brought up fresh. */
+/**
+ * Signs in, creating the account first if the stack was brought up fresh.
+ *
+ * The sign-up fallback is why local-stack/gotrue.env must keep signup enabled
+ * (GOTRUE_DISABLE_SIGNUP=false): smoke needs throwaway accounts to test RLS
+ * isolation, and this app's UI only ever offers sign-up for the very first
+ * account. Against a deployment with signup off, export a target that already
+ * has these accounts instead.
+ */
 async function ensureAccount(email: string, password: string) {
   const signin = await supabase.auth.signInWithPassword({ email, password })
   if (!signin.error) return signin.data.session
@@ -29,6 +38,14 @@ async function ensureAccount(email: string, password: string) {
 const session = await ensureAccount('me@example.com', 'chocolate123')
 const userId = session.user.id
 console.log('\nsign-in OK, user', userId)
+
+// The login page renders sign-up only while signup_allowed is true, so once an
+// account exists the gate must be shut. Checked signed-out to prove it, and
+// after signing in to prove it is not merely reading the caller's own state.
+await supabase.auth.signOut()
+assert.equal(await signupAllowed(), false, 'signup_allowed must be false once a user exists')
+console.log('  signup_allowed', 'false (sign-up form hidden)')
+await supabase.auth.signInWithPassword({ email: 'me@example.com', password: 'chocolate123' })
 
 // Start from an empty account so leftover rows from an interrupted run cannot
 // satisfy (or break) the exact-count assertions below.

@@ -72,9 +72,11 @@ do $$ begin
 end $$;
 SQL
 
-# The application schema.
-"$PGBIN/psql" -q -v ON_ERROR_STOP=1 -d "$DB" \
-  -f "$PROJECT/supabase/migrations/20261004150000_create_recipe_schema.sql" >/dev/null
+# The application schema. Every migration, in filename order, so a second file
+# is applied here too rather than silently skipped.
+for f in "$PROJECT"/supabase/migrations/*.sql; do
+  "$PGBIN/psql" -q -v ON_ERROR_STOP=1 -d "$DB" -f "$f" >/dev/null
+done
 
 # PostgREST connects as postgres and switches role per request, so it needs
 # privileges on everything in public.

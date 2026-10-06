@@ -176,56 +176,50 @@ try {
   await waitForText('Sign in to continue')
   pass('protected route is locked again after sign-out')
 
-// Register a brand-new account through the sign-up form. The local stack
-// auto-confirms email, so this should land straight on the recipe list.
-const NEW_EMAIL = `fresh-${Date.now()}@example.com`
+// The sign-up form is the bootstrap path for the very first account only: it
+// renders while signup_allowed is true, which is false as soon as one account
+// exists. The account used above already exists, so the login page must be
+// sign-in only with no way to reach registration.
 await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' })
-await page.evaluate(() => {
-  const btn = Array.from(document.querySelectorAll('button')).find((b) =>
-    /^Create one$/.test(b.textContent.trim()),
-  )
-  if (!btn) throw new Error('no "Create one" toggle on the login page')
-  btn.click()
-})
-await waitForText('Create your account')
-pass('login page offers a sign-up mode')
-
-// mismatched confirmation must be caught before any request is sent
-await page.type('#email', NEW_EMAIL)
-await page.type('#password', 'long-enough-password')
-await page.type('#confirmPassword', 'something-else')
-await clickByText('button', /^Create account$/)
-await waitForText('Passwords do not match')
-pass('mismatched confirmation is rejected')
-
-// too short must be caught too. Both fields match, so the length check is what
-// fires rather than the mismatch check.
-await setValue('#password', 'abc')
-await setValue('#confirmPassword', 'abc')
-await clickByText('button', /^Create account$/)
-await waitForText('at least 6 characters')
-pass('short password is rejected')
-
-// now do it properly
-await setValue('#password', 'long-enough-password')
-await setValue('#confirmPassword', 'long-enough-password')
-await clickByText('button', /^Create account$/)
-await waitForText('New recipe', 20000)
-pass(`sign-up signed the new account in (${NEW_EMAIL})`)
-
-// and that account can sign in again from scratch
-await page.evaluate(() => {
-  const btn = Array.from(document.querySelectorAll('button')).find((b) =>
-    /sign out/i.test(b.textContent.trim()),
-  )
-  btn?.click()
-})
 await waitForText('Sign in to continue')
+const signupControls = await page.evaluate(() =>
+  Array.from(document.querySelectorAll('button, a, label[for=confirmPassword]'))
+    .map((el) => el.textContent.trim())
+    .filter((t) => /^(Create one|Create account|Sign up)$/.test(t) || t === 'Confirm password'),
+)
+if (signupControls.length) {
+  throw new Error(`login page still offers sign-up: ${signupControls.join(', ')}`)
+}
+pass('no sign-up controls once an account exists')
+
+// Throwaway account, created through the auth API rather than the UI. Signup
+// stays enabled locally (local-stack/gotrue.env), but the UI will not offer it,
+// so going direct is the only way to get a second account for this check.
+const NEW_EMAIL = `fresh-${Date.now()}@example.com`
+const NEW_PASSWORD = 'long-enough-password'
+{
+  const signup = await fetch(`${API}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { apikey: ANON, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: NEW_EMAIL, password: NEW_PASSWORD }),
+  }).then((r) => r.json())
+  if (signup.error_description || signup.msg) {
+    throw new Error(`could not create throwaway account: ${JSON.stringify(signup)}`)
+  }
+}
+
+// ...and that account can sign in through the UI
 await page.type('#email', NEW_EMAIL)
-await page.type('#password', 'long-enough-password')
+await page.type('#password', NEW_PASSWORD)
 await clickByText('button', /^Sign in$/)
 await waitForText('New recipe', 15000)
 pass('the new account can sign in with those credentials')
+
+// Its session still sees an empty account, so the list shows the empty state
+// rather than the other account's recipe that was created and deleted above.
+await clickByText('button', /^Sign out$/)
+await waitForText('Sign in to continue')
+pass('sign-out returns to the sign-in-only login page')
 
 // The wrong-password step must fail, so GoTrue answering 400 on the
 // token endpoint is expected. Anything else is not.

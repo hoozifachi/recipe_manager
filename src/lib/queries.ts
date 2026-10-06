@@ -82,6 +82,17 @@ function describeError(message: string): string {
   return message
 }
 
+/**
+ * Whether the sign-up form should be rendered, which is only while no account
+ * exists. Callable signed out: the migration grants this one function to anon
+ * so the login page can decide before sign-in.
+ */
+export async function signupAllowed(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('signup_allowed')
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
 /** All recipes visible to the signed-in user, newest first. */
 export async function listRecipes(): Promise<RecipeWithTags[]> {
   const { data, error } = await supabase.rpc('search_recipes', { query: null })

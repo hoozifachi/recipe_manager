@@ -35,12 +35,22 @@ later runs reuse it.
 
 ### Creating an account
 
-The login page has a **Create one** toggle for registering the account. GoTrue
-on the local stack auto-confirms email, so registering signs you straight in.
+This is a single-user app, so there is no general registration page. The login
+page shows a **Create your account** form only while no account exists; once one
+does, it is sign-in only, with no way to reach registration.
 
-For a real deployment, create the account first and then turn registration off
+On a fresh stack that means registering through the UI, which signs you straight
+in because GoTrue auto-confirms email locally:
+
+1. `npm run stack:up`, then `npm run dev`
+2. Open http://localhost:5173 and register
+
+For a real deployment, register the same way before turning registration off,
 by setting `GOTRUE_DISABLE_SIGNUP=true` in `local-stack/gotrue.env` (or the
-equivalent setting in your Supabase project), so nobody else can register.
+equivalent **Enable email signup** setting in your Supabase project). The
+`signup_allowed` function in the migration hides the form, but that is a UI
+convenience, not enforcement: signup stays open at the API level until the
+server-side setting is off. Set it.
 
 Note that `stack:up` recreates the database every run, which deletes accounts
 along with everything else. You will need to register again after each run
@@ -56,10 +66,16 @@ npm run build
 ```
 
 `smoke` covers search, tag filtering, validation, and confirms a second account
-cannot read or write the first account's rows. `test:ui` walks the whole flow in
-a browser: register, sign in, create, search, filter by tag, edit, delete,
-sign out. It uses the system Chromium; set `CHROME_PATH` if yours is somewhere
-unusual.
+cannot read or write the first account's rows. It also asserts `signup_allowed`
+has gone false once an account exists. `test:ui` walks the whole flow in a
+browser: sign in, create, search, filter by tag, edit, delete, sign out, then
+checks the login page offers no sign-up controls and that a throwaway account
+created straight through the auth API can sign in. It uses the system Chromium;
+set `CHROME_PATH` if yours is somewhere unusual.
+
+Both create throwaway accounts, which is why `local-stack/gotrue.env` keeps
+`GOTRUE_DISABLE_SIGNUP=false`. Turning it off locally breaks them; the tests are
+meant for the local stack or a throwaway project.
 
 `smoke` targets whatever `.env.local` points at. Export the two variables to run
 it against a hosted project instead:
@@ -92,7 +108,8 @@ Then in the dashboard:
   login page, and with confirmation on `signUp` returns no session, so you would
   need SMTP configured just to finish registering.
 - **Auth → URL Configuration → Site URL**: set it to the production Vercel URL
-  once that exists.
+  once that exists. Any confirmation email GoTrue sends links back to this, so
+  leaving it at the local default puts a `localhost` link in the mail.
 - **Settings → API Keys**: create the `default` publishable key
   (`sb_publishable_...`). Legacy `anon`/`service_role` JWTs are deprecated at the
   end of 2026; `service_role` also has no use here because it bypasses RLS.

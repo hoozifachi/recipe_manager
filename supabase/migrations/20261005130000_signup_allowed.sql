@@ -27,3 +27,12 @@ $$;
 revoke execute on function public.signup_allowed() from public;
 
 grant execute on function public.signup_allowed() to anon, authenticated;
+
+-- PostgREST resolves RPCs from a schema cache it builds at startup, so a new
+-- function is invisible until something tells it to look again: without this
+-- every call fails with PGRST202, "Could not find the function
+-- public.signup_allowed without parameters in the schema cache". Local
+-- stack:up happens to start PostgREST after this migration so it never shows
+-- up there, but a hosted project's PostgREST is already running when db push
+-- applies this, and it does not watch for DDL on its own.
+notify pgrst, 'reload schema';

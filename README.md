@@ -120,6 +120,13 @@ for `postgres` in `public`, and a RLS policy is only consulted once the calling
 role already holds table privileges. Without those grants `db push` succeeds and
 then every query fails with `permission denied for table recipes`.
 
+The `signup_allowed` migration ends with `notify pgrst, 'reload schema'`.
+PostgREST resolves RPCs from a schema cache it builds at startup and does not
+watch for DDL, so a newly added function is otherwise invisible and every call
+fails with `PGRST202`, "Could not find the function ... in the schema cache".
+The local stack starts PostgREST after the migrations so it never shows the
+problem there, but `db push` applies them to an already-running PostgREST.
+
 Once you have registered in the browser, turn **email signup off** in the Auth
 settings so nobody else can.
 
